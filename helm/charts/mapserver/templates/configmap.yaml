@@ -5,6 +5,9 @@ metadata:
   labels:
     {{- include "common.labels" . | nindent 4 }}
 data:
+  asterra.conf: |
+    SetEnv MAPSERVER_CONFIG_FILE "/etc/mapserver/mapserver.conf"
+
   mapserver.conf: |
     CONFIG
       ENV

@@ -39,8 +39,14 @@ spec:
           volumeMounts:
             - name: mapserver-config
               mountPath: /etc/mapserver
+            - name: apache-config
+              mountPath: /etc/apache2/conf-enabled/asterra.conf
+              subPath: asterra.conf
           {{- include "common.resources" . | nindent 10 }}
       volumes:
         - name: mapserver-config
+          configMap:
+            name: {{ include "common.fullname" . }}-config
+        - name: apache-config
           configMap:
             name: {{ include "common.fullname" . }}-config
