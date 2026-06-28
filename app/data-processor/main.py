@@ -77,4 +77,4 @@ def process_message(message: dict, config: dict, sqs, logger: logging.Logger) ->
 if __name__ == "__main__":
     logger = setup_logger()
     config = get_config()
-    poll_sqs(config, logger)
+    poll_sqs(config, logger)# Trigger CI
