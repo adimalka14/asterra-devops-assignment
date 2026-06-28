@@ -120,9 +120,11 @@ def _validate_polygon(coords: Any) -> None:
     if not isinstance(coords, list) or len(coords) < 1:
         raise ValueError("Polygon must have at least one ring")
     for ring in coords:
-        if not isinstance(ring, list) or len(ring) < 4:
+        if not isinstance(ring, list):
             raise ValueError("Polygon ring must have at least 4 positions")
-        if ring[0] != ring[-1]:
+        if len(ring) > 0 and ring[0] != ring[-1]:
             raise ValueError("Polygon ring must be closed (first and last position must be equal)")
+        if len(ring) < 4:
+            raise ValueError("Polygon ring must have at least 4 positions")
         for pos in ring:
             _validate_position(pos)

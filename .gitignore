@@ -1,3 +1,5 @@
 terraform/.terraform/
 *.tfstate
 *.tfstate.backup
+docker-compose.yaml
+localstack-init/

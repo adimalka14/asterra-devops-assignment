@@ -1,0 +1,30 @@
+image:
+  repository: <account-id>.dkr.ecr.us-east-1.amazonaws.com/asterra-devops-assignment
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  region: ""
+  sqsQueueUrl: ""
+  s3BucketName: ""
+  logGroup: "/asterra/data-processor"
+
+externalSecret:
+  refreshInterval: 1h
+  secretStoreName: aws-secrets-manager
+  secretStoreKind: ClusterSecretStore
+  remoteSecretName: "asterra-devops-assignment/rds/password"

@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.fullname" . }}-config
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+data:
+  mapserver.map: |
+    MAP
+      NAME "asterra-mapserver"
+      STATUS ON
+      SIZE 800 600
+      EXTENT -180 -90 180 90
+      UNITS DD
+
+      WEB
+        METADATA
+          "wms_title"           "Asterra MapServer"
+          "wms_onlineresource"  "{{ .Values.mapserver.wmsOnlineResource }}"
+          "wms_srs"             "EPSG:4326 EPSG:3857"
+          "wms_enable_request"  "*"
+        END
+      END
+
+      PROJECTION
+        "{{ .Values.mapserver.projection }}"
+      END
+
+      LAYER
+        NAME "geojson_layer"
+        STATUS ON
+        TYPE POLYGON
+        DATA "{{ .Values.mapserver.dataPath }}"
+
+        PROJECTION
+          "{{ .Values.mapserver.projection }}"
+        END
+
+        CLASS
+          NAME "GeoJSON Features"
+          STYLE
+            COLOR 100 150 200
+            OUTLINECOLOR 0 0 0
+            WIDTH 1
+          END
+        END
+      END
+    END

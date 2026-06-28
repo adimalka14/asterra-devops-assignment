@@ -1,0 +1,58 @@
+environments:
+  default:
+    values:
+      - region: us-east-1
+
+repositories:
+  - name: external-secrets
+    url: https://charts.external-secrets.io
+
+helmDefaults:
+  wait: true
+  timeout: 300
+
+releases:
+  # External Secrets Operator - must be installed first
+  - name: external-secrets
+    namespace: external-secrets
+    chart: external-secrets/external-secrets
+    version: 0.9.0
+    createNamespace: true
+    values:
+      - charts/external-secrets/values.yaml
+
+  # SecretStore - depends on ESO CRDs
+  - name: secret-store
+    namespace: default
+    chart: ./charts/secret-store
+    needs:
+      - external-secrets/external-secrets
+    set:
+      - name: region
+        value: {{ .Values.region }}
+
+  # data-processor - depends on SecretStore
+  - name: data-processor
+    namespace: default
+    chart: ./charts/data-processor
+    needs:
+      - default/secret-store
+    values:
+      - charts/data-processor/values.yaml
+    set:
+      - name: env.region
+        value: {{ .Values.region }}
+
+  # gdal-service - no dependencies
+  - name: gdal-service
+    namespace: default
+    chart: ./charts/gdal-service
+    values:
+      - charts/gdal-service/values.yaml
+
+  # mapserver - no dependencies
+  - name: mapserver
+    namespace: default
+    chart: ./charts/mapserver
+    values:
+      - charts/mapserver/values.yaml
