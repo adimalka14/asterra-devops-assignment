@@ -45,16 +45,19 @@ log "k3s instance       : ${K3S_INSTANCE_ID} (${K3S_IP})"
 # ── 3. Kubeconfig ──────────────────────────────────────────────────────────────
 step 3 "Fetch kubeconfig from k3s instance via SSM"
 
-log "Waiting for SSM agent to come online..."
+log "Waiting for SSM agent to come online (timeout: 10m)..."
+SSM_DEADLINE=$(( $(date +%s) + 600 ))
 until aws ssm describe-instance-information \
       --filters "Key=InstanceIds,Values=${K3S_INSTANCE_ID}" \
       --query 'InstanceInformationList[0].PingStatus' \
       --output text --region "$REGION" 2>/dev/null | grep -q "^Online$"; do
+  (( $(date +%s) < SSM_DEADLINE )) || die "SSM agent did not come online within 10 minutes. The instance may need replacement: terraform apply -replace=aws_instance.k3s"
   sleep 10
 done
 log "SSM agent online"
 
-log "Waiting for k3s to finish initializing (may take a few minutes)..."
+log "Waiting for k3s to finish initializing (timeout: 10m)..."
+K3S_DEADLINE=$(( $(date +%s) + 600 ))
 while true; do
   CMD_ID="$(aws ssm send-command \
     --instance-ids "$K3S_INSTANCE_ID" \
@@ -68,6 +71,7 @@ while true; do
     --region "$REGION" \
     --query 'StandardOutputContent' --output text 2>/dev/null | tr -d '[:space:]')"
   [[ "$OUT" == "ready" ]] && break
+  (( $(date +%s) < K3S_DEADLINE )) || die "k3s did not initialize within 10 minutes. Check instance logs via SSM."
   log "k3s not ready yet, retrying in 20s..."
   sleep 20
 done
