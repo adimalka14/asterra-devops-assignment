@@ -53,7 +53,9 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: PYTHONPATH=app/gdal-service pytest app/gdal-service/tests/ -v
+        run: |
+          docker build -t gdal-test -f app/gdal-service/Dockerfile app/gdal-service
+          docker run --rm gdal-test python3 -m pytest tests/ -v
 
   # ── Terraform format check ─────────────────────────────────────────────────────
   terraform-lint:

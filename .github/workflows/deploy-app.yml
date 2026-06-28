@@ -44,10 +44,17 @@ jobs:
           cache: pip
           cache-dependency-path: app/${{ matrix.service }}/requirements.txt
 
-      - name: Install & test
+      - name: Install & test (data-processor)
+        if: matrix.service == 'data-processor'
         run: |
-          pip install -r app/${{ matrix.service }}/requirements.txt pytest
-          PYTHONPATH=app/${{ matrix.service }} pytest app/${{ matrix.service }}/tests/ -v
+          pip install -r app/data-processor/requirements.txt pytest
+          PYTHONPATH=app/data-processor pytest app/data-processor/tests/ -v
+
+      - name: Build & test (gdal-service)
+        if: matrix.service == 'gdal-service'
+        run: |
+          docker build -t gdal-test -f app/gdal-service/Dockerfile app/gdal-service
+          docker run --rm gdal-test python3 -m pytest tests/ -v
 
   # ── 2. Build & push Docker images ─────────────────────────────────────────────
   build:
@@ -178,6 +185,7 @@ jobs:
           curl -fsSL https://github.com/helmfile/helmfile/releases/download/v0.167.1/helmfile_0.167.1_linux_amd64.tar.gz \
             | tar xz
           sudo mv helmfile /usr/local/bin/
+          helm plugin install https://github.com/databus23/helm-diff
 
       - name: Helmfile apply
         working-directory: helm
