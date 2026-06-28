@@ -3,6 +3,15 @@
 ## Overview
 This project implements a fully automated, cloud-native pipeline for processing geospatial data. The system automatically ingests GeoJSON files uploaded to cloud storage, queues them for sequential processing, validates their geometry using geospatial libraries, and securely stores the extracted metadata in a relational database for further use, such as map rendering.
 
+## Architecture Flow
+![Architecture Flow](public/architecture_flow.png)
+
+1. **User** uploads a GeoJSON file to **Amazon S3**.
+2. **S3** sends an event notification to an **AWS SQS** queue.
+3. **data-processor** (running in Kubernetes) constantly polls the SQS queue and downloads the new file from S3.
+4. **data-processor** queries the **gdal-service** to validate and analyze the geospatial data.
+5. If valid, the resulting metadata is permanently stored in **RDS PostgreSQL**.
+
 ## Technologies
 - **Cloud Provider:** AWS
 - **Infrastructure as Code:** Terraform
