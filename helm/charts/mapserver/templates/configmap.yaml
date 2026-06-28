@@ -6,16 +6,14 @@ metadata:
     {{- include "common.labels" . | nindent 4 }}
 data:
   asterra.conf: |
-    SetEnv MAPSERVER_CONFIG_FILE "/etc/mapserver/mapserver.conf"
-    FcgidInitialEnv MAPSERVER_CONFIG_FILE "/etc/mapserver/mapserver.conf"
-
-  mapserver.conf: |
-    CONFIG
-      ENV
-        MS_MAPFILE "/etc/mapserver/mapserver.map"
-        MS_ERRORFILE "stderr"
-      END
-    END
+    SetEnv MS_MAPFILE /etc/mapserver/mapserver.map
+    FcgidInitialEnv MS_MAPFILE /etc/mapserver/mapserver.map
+    SetEnv MS_MAP_PATTERN .*
+    FcgidInitialEnv MS_MAP_PATTERN .*
+    SetEnv MS_MAP_NO_PATH TRUE
+    FcgidInitialEnv MS_MAP_NO_PATH TRUE
+    SetEnv MS_ERRORFILE stderr
+    FcgidInitialEnv MS_ERRORFILE stderr
 
   mapserver.map: |
     MAP
