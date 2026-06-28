@@ -1,84 +1,74 @@
-# Asterra Geo-Data Processing Pipeline
+# Asterra DevOps Assignment
 
-```mermaid
-graph TD
-    %% Define Styles
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black;
-    classDef k8s fill:#326CE5,stroke:#fff,stroke-width:2px,color:white;
-    classDef db fill:#336791,stroke:#fff,stroke-width:2px,color:white;
+## Overview
+This project implements a fully automated, cloud-native pipeline for processing geospatial data. The system automatically ingests GeoJSON files uploaded to cloud storage, queues them for sequential processing, validates their geometry using geospatial libraries, and securely stores the extracted metadata in a relational database for further use, such as map rendering.
 
-    %% Nodes
-    User([User / Client])
-    S3[("Amazon S3\n(GeoJSON Bucket)")]:::aws
-    SQS["AWS SQS\n(Message Queue)"]:::aws
-    
-    subgraph Kubernetes Cluster [K3s Cluster]
-        DP["data-processor\n(Python Microservice)"]:::k8s
-        GDAL["gdal-service\n(Flask API)"]:::k8s
-        MS["mapserver\n(Renderer)"]:::k8s
-    end
-    
-    RDS[("RDS PostgreSQL\n(PostGIS Database)")]:::db
+## Technologies
+- **Cloud Provider:** AWS
+- **Infrastructure as Code:** Terraform
+- **Container Orchestration:** Kubernetes (K3s)
+- **Deployment & Package Management:** Helm & Helmfile
+- **CI/CD:** GitHub Actions
+- **Secrets Management:** External Secrets Operator (ESO)
+- **Languages & Frameworks:** Python, Flask, GDAL
 
-    %% Connections
-    User -- "Uploads GeoJSON" --> S3
-    S3 -- "S3 Event Notification" --> SQS
-    SQS -- "Polls for Messages" --> DP
-    DP -- "Downloads GeoJSON" --> S3
-    DP -- "Sends data for validation" --> GDAL
-    GDAL -- "Returns metadata & bbox" --> DP
-    DP -- "Saves validated data" --> RDS
-    MS -- "Queries map data" --> RDS
-    User -- "Views Maps" --> MS
+## Infrastructure
+The system provisions a robust AWS environment from scratch:
+- **Compute:** A single EC2 instance (Amazon Linux 2023) running a lightweight K3s Kubernetes cluster.
+- **Database:** AWS RDS PostgreSQL, accessible only from the Kubernetes cluster.
+- **Messaging:** AWS SQS for asynchronous, reliable message processing.
+- **Storage:** Amazon S3 for storing incoming GeoJSON files.
+- **Registry:** Amazon ECR for securely storing Docker images.
+- **Security:** AWS Secrets Manager for database credentials, synced directly to Kubernetes via ESO.
+
+## How to Run
+
+### 1. Bootstrap State Backend
+Initialize the S3 bucket and DynamoDB table for Terraform remote state:
+```bash
+cd terraform/bootstrap
+terraform init
+terraform apply -auto-approve
 ```
 
-## 📖 The Logical Flow (What this project actually does)
+### 2. Provision Infrastructure
+Provision the VPC, EC2, RDS, ECR, SQS, and IAM roles:
+```bash
+cd terraform
+terraform init
+terraform apply -auto-approve
+```
 
-This project is an automated, scalable pipeline for processing geospatial data (maps, coordinates, and polygons). 
+### 3. Deploy Kubernetes Resources
+After the infrastructure is ready, deploy the microservices and operators:
+```bash
+cd helm
+helmfile apply
+```
 
-In the real world, here is how data flows through the system logically:
+## CI/CD Pipeline
+The project utilizes GitHub Actions for continuous integration and deployment, separated into three distinct workflows:
 
-1. **Data Ingestion:** A new file containing geographical shapes (GeoJSON) is uploaded to our cloud storage (`Amazon S3`).
-2. **Event Trigger:** The moment the file is uploaded, a notification is sent to a message queue (`AWS SQS`). This ensures no files are lost and they are processed in a reliable order.
-3. **Data Processing (The Brain):** Our `data-processor` microservice (running inside Kubernetes) constantly listens to this queue. When it gets a message, it downloads the map file from S3.
-4. **Geospatial Validation:** Before saving anything, the `data-processor` asks the `gdal-service` to inspect the file. The `gdal-service` acts as an expert cartographer—it verifies that the geometry is valid, calculates the bounding box (the area it covers), and counts the features.
-5. **Storage & Serving:** If the file is valid, the metadata and results are saved securely into our Relational Database (`RDS PostgreSQL`). From there, tools like `mapserver` can query the database and render visual maps for end-users.
+1. **Continuous Integration (`ci.yml`)**: 
+   Triggers on all pushes and Pull Requests. It runs Python `pytest` suites inside Docker for the application code and validates Terraform formatting (`terraform fmt` and `terraform validate`), ensuring code quality before any deployment.
 
----
+2. **Continuous Deployment - App (`cd-app.yml`)**: 
+   Triggers on pushes to the `main` branch involving `app/` or `helm/` paths. It builds the Docker images, pushes them to ECR, and runs `helmfile apply` to seamlessly update the application in the Kubernetes cluster.
 
-## 🛠️ Technical Architecture
+3. **Continuous Deployment - Infra (`cd-infra.yml`)**: 
+   Triggers on pushes to the `main` branch involving `terraform/` paths. It automatically runs `terraform apply` to keep the AWS infrastructure up to date.
 
-To support the logical flow above, we built a fully automated, production-ready cloud environment:
+## How to Test
 
-- **Infrastructure as Code (Terraform):** Automatically provisions the entire AWS environment (VPC, EC2, RDS, S3, SQS, ECR, and IAM roles) from scratch.
-- **Kubernetes (K3s):** A lightweight Kubernetes cluster runs on the EC2 instance to orchestrate our Docker containers.
-- **Microservices:**
-  - `data-processor`: A Python worker processing the SQS queue.
-  - `gdal-service`: A Python Flask API utilizing OSGeo/GDAL for deep spatial analysis.
-  - `mapserver`: An open-source geographic data rendering engine.
-- **Secrets Management:** `External-Secrets Operator (ESO)` securely pulls database passwords and credentials from AWS Secrets Manager directly into Kubernetes.
-
-## 🚀 CI/CD Pipelines (GitHub Actions)
-
-We practice strict Continuous Integration and Continuous Deployment using 3 isolated pipelines:
-
-1. **`ci.yml` (Continuous Integration):** Runs on every Push/PR. It executes our Python `pytest` suites inside Docker and validates Terraform formatting without deploying anything.
-2. **`cd-app.yml` (App Deployment):** Triggers only on pushes to `main` involving application code. It builds the Docker images, pushes them to AWS ECR, and uses `Helmfile` to seamlessly update the Kubernetes cluster.
-3. **`cd-infra.yml` (Infra Deployment):** Triggers only when Terraform code changes. It automatically runs `terraform apply` to keep the AWS infrastructure up to date.
-
----
-
-## 🧪 Testing the End-to-End Flow
-
-To see the system in action:
-
-1. **Tail the Processor Logs**
+1. **Connect to the Cluster (Logs)**
+   Export the Kubeconfig generated by Terraform and monitor the `data-processor` logs:
    ```bash
    export KUBECONFIG=~/test/projects/asterra-devops-assignment/.k3s-kubeconfig
    kubectl logs -l app=data-processor-data-processor -f
    ```
 
-2. **Upload a Sample GeoJSON**
+2. **Trigger the Flow**
+   Upload a sample GeoJSON file to the S3 bucket (replace `<your-bucket-name>` with the actual bucket name created by Terraform):
    ```bash
    cat <<EOF > sample.geojson
    {
@@ -95,9 +85,5 @@ To see the system in action:
    aws s3 cp sample.geojson s3://<your-bucket-name>/
    ```
 
-3. **Check the Output**
-   You will instantly see the `data-processor` log the S3 download, the successful GDAL validation, and the database insertion!
-
-### Real Test Results:
-![Test Log Output 1](public/test-result-1.png)
-![Test Log Output 2](public/test-result-2.png)
+3. **Verify the Results**
+   In your terminal, you will see the `data-processor` receive the SQS message, download the file from S3, validate the spatial data via the `gdal-service`, and insert the final metadata into the RDS PostgreSQL database.
