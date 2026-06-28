@@ -29,5 +29,5 @@ mapserver:
   wmsOnlineResource: "http://mapserver/cgi-bin/mapserv"
   dataPath: "/data/sample.geojson"
   projection: "init=epsg:4326"
-  probePath: "/cgi-bin/mapserv?map=ASTERRA&SERVICE=WMS&REQUEST=GetCapabilities"
+  probePath: "/cgi-bin/mapserv?SERVICE=WMS&REQUEST=GetCapabilities"
   msMapNoPath: "FALSE"
