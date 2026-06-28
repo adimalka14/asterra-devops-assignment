@@ -24,14 +24,16 @@ terraform apply -auto-approve -input=false
 # ── 2. Main Terraform ──────────────────────────────────────────────────────────
 step 2 "Terraform main (VPC, ECR, k3s, RDS, SQS, S3, IAM, Secrets Manager)"
 cd "${SCRIPT_DIR}/terraform"
+# -reconfigure picks up the S3 backend that bootstrap just created
 terraform init -input=false -reconfigure
 terraform apply -auto-approve -input=false
 
 ECR_URL="$(terraform output -raw ecr_repository_url)"
-ECR_REGISTRY="${ECR_URL%%/*}"
-ECR_GDAL_URL="${ECR_REGISTRY}/${PROJECT_NAME}-gdal"
+ECR_REGISTRY="${ECR_URL%%/*}"          # 123456789.dkr.ecr.us-east-1.amazonaws.com
 SQS_QUEUE_URL="$(terraform output -raw sqs_queue_url)"
 S3_BUCKET_NAME="$(terraform output -raw s3_bucket_name)"
+
+ECR_GDAL_URL="${ECR_REGISTRY}/${PROJECT_NAME}-gdal"
 
 log "ECR data-processor : ${ECR_URL}"
 log "ECR gdal-service   : ${ECR_GDAL_URL}"
