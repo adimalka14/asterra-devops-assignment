@@ -8,6 +8,7 @@ environments:
       - sqsQueueUrl: ""
       - s3BucketName: ""
 
+---
 repositories:
   - name: external-secrets
     url: https://charts.external-secrets.io
