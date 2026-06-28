@@ -24,23 +24,43 @@ resource "aws_instance" "k3s" {
     #!/bin/bash
     set -e
 
-    # Install k3s
-    curl -sfL https://get.k3s.io | sh -
-
     # Install AWS CLI
     dnf install -y aws-cli
 
-    # Configure kubeconfig for root
-    mkdir -p /root/.kube
-    cp /etc/rancher/k3s/k3s.yaml /root/.kube/config
+    # Install k3s
+    curl -sfL https://get.k3s.io | sh -
 
-    # ECR login
-    aws ecr get-login-password --region ${var.region} | \
-      k3s ctr images pull \
-      $(aws ecr describe-repositories \
-        --repository-names ${var.project_name} \
-        --query 'repositories[0].repositoryUri' \
-        --output text)
+    # Wait for k3s API to be ready
+    until k3s kubectl get nodes &>/dev/null 2>&1; do sleep 5; done
+
+    # Configure ECR authentication for containerd
+    # $${X} in terraform heredoc → ${X} in the actual bash script
+    REGION="${var.region}"
+    ACCOUNT_ID=$$(aws sts get-caller-identity --query Account --output text)
+    ECR_REGISTRY="$${ACCOUNT_ID}.dkr.ecr.$${REGION}.amazonaws.com"
+    ECR_TOKEN=$$(aws ecr get-login-password --region "$${REGION}")
+
+    mkdir -p /etc/rancher/k3s
+    printf 'configs:\n  "%s":\n    auth:\n      username: AWS\n      password: "%s"\n' \
+      "$${ECR_REGISTRY}" "$${ECR_TOKEN}" > /etc/rancher/k3s/registries.yaml
+
+    # Restart k3s to apply registry credentials
+    systemctl restart k3s
+    until k3s kubectl get nodes &>/dev/null 2>&1; do sleep 5; done
+
+    # Refresh ECR token every 6 hours (tokens expire after 12h)
+    cat > /usr/local/bin/refresh-ecr.sh << 'REFRESH'
+    #!/bin/bash
+    REGION=$(curl -sf http://169.254.169.254/latest/meta-data/placement/region)
+    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+    ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+    ECR_TOKEN=$(aws ecr get-login-password --region "${REGION}")
+    printf 'configs:\n  "%s":\n    auth:\n      username: AWS\n      password: "%s"\n' \
+      "${ECR_REGISTRY}" "${ECR_TOKEN}" > /etc/rancher/k3s/registries.yaml
+    systemctl restart k3s
+    REFRESH
+    chmod +x /usr/local/bin/refresh-ecr.sh
+    echo "0 */6 * * * root /usr/local/bin/refresh-ecr.sh" > /etc/cron.d/ecr-refresh
   EOF
 
   tags = merge(var.tags, { Name = "${var.project_name}-k3s" })

@@ -3,3 +3,4 @@ terraform/.terraform/
 *.tfstate.backup
 docker-compose.yaml
 localstack-init/
+.k3s-kubeconfig
