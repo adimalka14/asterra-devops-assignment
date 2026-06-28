@@ -4,45 +4,14 @@
 This project implements a fully automated, cloud-native pipeline for processing geospatial data. The system automatically ingests GeoJSON files uploaded to cloud storage, queues them for sequential processing, validates their geometry using geospatial libraries, and securely stores the extracted metadata in a relational database for further use, such as map rendering.
 
 ## Architecture Flow
-
-```mermaid
-graph TD
-    %% Styling
-    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black;
-    classDef k8s fill:#326CE5,stroke:#fff,stroke-width:2px,color:white;
-    classDef db fill:#336791,stroke:#fff,stroke-width:2px,color:white;
-
-    %% Components
-    User([User / Client])
-    S3[("Amazon S3\n(GeoJSON Bucket)")]:::aws
-    SQS["AWS SQS\n(Message Queue)"]:::aws
-    
-    subgraph K3s Cluster [Kubernetes Cluster]
-        DP["data-processor\n(Python Service)"]:::k8s
-        GDAL["gdal-service\n(Flask API)"]:::k8s
-        MS["mapserver\n(Map Renderer)"]:::k8s
-    end
-    
-    RDS[("RDS PostgreSQL\n(PostGIS Database)")]:::db
-    EndUser([End User / Map Viewer])
-
-    %% Flow / Connections
-    User -- "1. Uploads GeoJSON" --> S3
-    S3 -- "2. Event Notification" --> SQS
-    DP -- "3. Polls for Messages" --> SQS
-    DP -- "4. Downloads File" --> S3
-    DP -- "5. Validates Data" --> GDAL
-    GDAL -- "6. Returns Metadata" --> DP
-    DP -- "7. Saves Metadata" --> RDS
-    MS -- "8. Queries Map Data" --> RDS
-    EndUser -- "9. Views Maps" --> MS
-```
+![Architecture Diagram](public/architecture.png)
 
 1. **User** uploads a GeoJSON file to **Amazon S3**.
 2. **S3** sends an event notification to an **AWS SQS** queue.
-3. **data-processor** (running in Kubernetes) constantly polls the SQS queue and downloads the new file from S3.
+3. **data-processor** (running in Kubernetes) polls the SQS queue and downloads the new file from S3.
 4. **data-processor** queries the **gdal-service** to validate and analyze the geospatial data.
 5. If valid, the resulting metadata is permanently stored in **RDS PostgreSQL**.
+6. **mapserver** queries the PostgreSQL database to render maps for end users.
 
 ## Technologies
 - **Cloud Provider:** AWS
