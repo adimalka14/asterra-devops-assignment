@@ -1,6 +1,36 @@
 # Asterra Geo-Data Processing Pipeline
 
-![Architecture Diagram](public/architecture_diagram.png)
+```mermaid
+graph TD
+    %% Define Styles
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black;
+    classDef k8s fill:#326CE5,stroke:#fff,stroke-width:2px,color:white;
+    classDef db fill:#336791,stroke:#fff,stroke-width:2px,color:white;
+
+    %% Nodes
+    User([User / Client])
+    S3[("Amazon S3\n(GeoJSON Bucket)")]:::aws
+    SQS["AWS SQS\n(Message Queue)"]:::aws
+    
+    subgraph Kubernetes Cluster [K3s Cluster]
+        DP["data-processor\n(Python Microservice)"]:::k8s
+        GDAL["gdal-service\n(Flask API)"]:::k8s
+        MS["mapserver\n(Renderer)"]:::k8s
+    end
+    
+    RDS[("RDS PostgreSQL\n(PostGIS Database)")]:::db
+
+    %% Connections
+    User -- "Uploads GeoJSON" --> S3
+    S3 -- "S3 Event Notification" --> SQS
+    SQS -- "Polls for Messages" --> DP
+    DP -- "Downloads GeoJSON" --> S3
+    DP -- "Sends data for validation" --> GDAL
+    GDAL -- "Returns metadata & bbox" --> DP
+    DP -- "Saves validated data" --> RDS
+    MS -- "Queries map data" --> RDS
+    User -- "Views Maps" --> MS
+```
 
 ## 📖 The Logical Flow (What this project actually does)
 
