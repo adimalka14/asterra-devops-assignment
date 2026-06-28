@@ -1,0 +1,6 @@
+boto3>=1.34.0
+psycopg[binary]>=3.3.0
+geopandas>=1.1.4
+shapely>=2.0.0
+watchtower>=3.0.1
+pytest>=8.0.0
