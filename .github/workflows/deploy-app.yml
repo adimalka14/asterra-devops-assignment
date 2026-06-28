@@ -41,8 +41,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: app/${{ matrix.service }}/requirements.txt
 
       - name: Install & test (data-processor)
         if: matrix.service == 'data-processor'
