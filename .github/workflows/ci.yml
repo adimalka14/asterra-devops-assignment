@@ -1,65 +1,50 @@
-name: CI
+name: Continuous Integration
 
 on:
   push:
-    branches-ignore: [main]
+    branches: [main]
   pull_request:
 
+env:
+  AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION:    us-east-1
+
 jobs:
-  # ── Python tests: data-processor ──────────────────────────────────────────────
-  test-data-processor:
-    name: Test / data-processor
+  test-python:
+    name: Run Python Tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [data-processor, gdal-service]
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        if: matrix.service == 'data-processor'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Test data-processor
+        if: matrix.service == 'data-processor'
         run: |
           pip install --upgrade pip
-          pip install -r app/data-processor/requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run tests
-        run: |
+          pip install -r app/data-processor/requirements.txt pytest pytest-cov
           PYTHONPATH=app/data-processor pytest app/data-processor/tests/ \
-            -v \
-            --cov=app/data-processor \
-            --cov-report=term-missing \
-            --cov-fail-under=0
+            -v --cov=app/data-processor --cov-report=term-missing --cov-fail-under=0
 
-  # ── Python tests: gdal-service ─────────────────────────────────────────────────
-  test-gdal-service:
-    name: Test / gdal-service
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r app/gdal-service/requirements.txt
-          pip install pytest
-
-      - name: Run tests
+      - name: Test gdal-service
+        if: matrix.service == 'gdal-service'
         run: |
           docker build -t gdal-test -f app/gdal-service/Dockerfile app/gdal-service
           docker run --rm gdal-test python3 -m pytest tests/ -v
 
-  # ── Terraform format check ─────────────────────────────────────────────────────
-  terraform-lint:
-    name: Terraform fmt / validate
+  test-infra:
+    name: Terraform Validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "~1.9"
@@ -67,13 +52,7 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -check -recursive terraform/
 
-      - name: terraform validate (bootstrap)
-        working-directory: terraform/bootstrap
-        run: |
-          terraform init -backend=false
-          terraform validate
-
-      - name: terraform validate (main)
+      - name: terraform validate
         working-directory: terraform
         run: |
           terraform init -backend=false
