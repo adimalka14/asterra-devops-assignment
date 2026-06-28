@@ -47,7 +47,7 @@ jobs:
       - name: Install & test
         run: |
           pip install -r app/${{ matrix.service }}/requirements.txt pytest
-          pytest app/${{ matrix.service }}/tests/ -v
+          PYTHONPATH=app/${{ matrix.service }} pytest app/${{ matrix.service }}/tests/ -v
 
   # ── 2. Build & push Docker images ─────────────────────────────────────────────
   build:

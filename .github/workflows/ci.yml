@@ -27,7 +27,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest app/data-processor/tests/ \
+          PYTHONPATH=app/data-processor pytest app/data-processor/tests/ \
             -v \
             --cov=app/data-processor \
             --cov-report=term-missing \
@@ -53,7 +53,7 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: pytest app/gdal-service/tests/ -v
+        run: PYTHONPATH=app/gdal-service pytest app/gdal-service/tests/ -v
 
   # ── Terraform format check ─────────────────────────────────────────────────────
   terraform-lint:
