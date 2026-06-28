@@ -45,7 +45,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-${count.index + 1}"
+    Name                     = "${var.project_name}-public-${count.index + 1}"
     "kubernetes.io/role/elb" = "1"
   }
 }
@@ -64,7 +64,7 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  count = var.public_subnet_count
+  count          = var.public_subnet_count
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
@@ -79,7 +79,7 @@ resource "aws_subnet" "private" {
   map_public_ip_on_launch = false
 
   tags = {
-    Name = "${var.project_name}-private-${count.index + 1}",
+    Name                              = "${var.project_name}-private-${count.index + 1}",
     "kubernetes.io/role/internal-elb" = "1"
   }
 }

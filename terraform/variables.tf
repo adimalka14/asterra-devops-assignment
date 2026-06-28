@@ -35,9 +35,9 @@ variable "tags" {
 }
 
 variable "db_name" {
-  type        = string
+  type = string
 }
 
 variable "db_username" {
-  type        = string
+  type = string
 }
