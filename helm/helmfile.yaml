@@ -2,6 +2,11 @@ environments:
   default:
     values:
       - region: us-east-1
+      - dataProcessorImage: ""
+      - gdalServiceImage: ""
+      - imageTag: latest
+      - sqsQueueUrl: ""
+      - s3BucketName: ""
 
 repositories:
   - name: external-secrets
@@ -40,8 +45,16 @@ releases:
     values:
       - charts/data-processor/values.yaml
     set:
+      - name: image.repository
+        value: {{ .Values.dataProcessorImage }}
+      - name: image.tag
+        value: {{ .Values.imageTag }}
       - name: env.region
         value: {{ .Values.region }}
+      - name: env.sqsQueueUrl
+        value: {{ .Values.sqsQueueUrl }}
+      - name: env.s3BucketName
+        value: {{ .Values.s3BucketName }}
 
   # gdal-service - no dependencies
   - name: gdal-service
@@ -49,8 +62,13 @@ releases:
     chart: ./charts/gdal-service
     values:
       - charts/gdal-service/values.yaml
+    set:
+      - name: image.repository
+        value: {{ .Values.gdalServiceImage }}
+      - name: image.tag
+        value: {{ .Values.imageTag }}
 
-  # mapserver - no dependencies
+  # mapserver - uses public Docker Hub image, no build needed
   - name: mapserver
     namespace: default
     chart: ./charts/mapserver
