@@ -24,26 +24,14 @@ terraform apply -auto-approve -input=false
 # ── 2. Main Terraform ──────────────────────────────────────────────────────────
 step 2 "Terraform main (VPC, ECR, k3s, RDS, SQS, S3, IAM, Secrets Manager)"
 cd "${SCRIPT_DIR}/terraform"
-# -reconfigure picks up the S3 backend that bootstrap just created
 terraform init -input=false -reconfigure
 terraform apply -auto-approve -input=false
 
 ECR_URL="$(terraform output -raw ecr_repository_url)"
-ECR_REGISTRY="${ECR_URL%%/*}"          # 123456789.dkr.ecr.us-east-1.amazonaws.com
+ECR_REGISTRY="${ECR_URL%%/*}"
+ECR_GDAL_URL="${ECR_REGISTRY}/${PROJECT_NAME}-gdal"
 SQS_QUEUE_URL="$(terraform output -raw sqs_queue_url)"
 S3_BUCKET_NAME="$(terraform output -raw s3_bucket_name)"
-
-# gdal-service gets its own ECR repository (separate from data-processor)
-ECR_GDAL_URL="${ECR_REGISTRY}/${PROJECT_NAME}-gdal"
-if ! aws ecr describe-repositories \
-      --repository-names "${PROJECT_NAME}-gdal" \
-      --region "$REGION" &>/dev/null; then
-  log "Creating ECR repository for gdal-service..."
-  aws ecr create-repository \
-    --repository-name "${PROJECT_NAME}-gdal" \
-    --image-scanning-configuration scanOnPush=true \
-    --region "$REGION" &>/dev/null
-fi
 
 log "ECR data-processor : ${ECR_URL}"
 log "ECR gdal-service   : ${ECR_GDAL_URL}"
@@ -52,18 +40,8 @@ log "S3 bucket          : ${S3_BUCKET_NAME}"
 
 # ── 3. Build & Push Docker images ─────────────────────────────────────────────
 step 3 "Build & push Docker images (tag: ${IMAGE_TAG})"
-aws ecr get-login-password --region "$REGION" | \
-  docker login --username AWS --password-stdin "$ECR_REGISTRY"
-
-log "Building data-processor..."
-docker build -t "${ECR_URL}:${IMAGE_TAG}" "${SCRIPT_DIR}/app/data-processor"
-docker push "${ECR_URL}:${IMAGE_TAG}"
-
-log "Building gdal-service..."
-docker build -t "${ECR_GDAL_URL}:${IMAGE_TAG}" "${SCRIPT_DIR}/app/gdal-service"
-docker push "${ECR_GDAL_URL}:${IMAGE_TAG}"
-
-# mapserver uses the public camptocamp/mapserver image — no build or push needed
+ECR_URL="$ECR_URL" ECR_GDAL_URL="$ECR_GDAL_URL" IMAGE_TAG="$IMAGE_TAG" \
+  "${SCRIPT_DIR}/build.sh"
 
 # ── 4. Helm deploy ─────────────────────────────────────────────────────────────
 step 4 "Helmfile apply"
