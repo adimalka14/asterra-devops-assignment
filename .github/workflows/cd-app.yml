@@ -178,6 +178,6 @@ jobs:
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig
         run: |
-          kubectl rollout status deployment/data-processor --timeout=120s
-          kubectl rollout status deployment/gdal-service   --timeout=120s
+          kubectl rollout status deployment/data-processor-data-processor --timeout=120s
+          kubectl rollout status deployment/gdal-service-gdal-service   --timeout=120s
           kubectl get pods -A
