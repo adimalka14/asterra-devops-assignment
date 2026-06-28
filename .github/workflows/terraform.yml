@@ -37,11 +37,7 @@ jobs:
         with:
           terraform_version: "~1.9"
 
-      - name: Bootstrap (ensure state backend exists)
-        working-directory: terraform/bootstrap
-        run: |
-          terraform init
-          terraform apply -auto-approve
+
 
       - name: terraform init
         working-directory: terraform
@@ -117,11 +113,7 @@ jobs:
         with:
           terraform_version: "~1.9"
 
-      - name: Bootstrap (ensure state backend exists)
-        working-directory: terraform/bootstrap
-        run: |
-          terraform init
-          terraform apply -auto-approve
+
 
       - name: terraform init
         working-directory: terraform
