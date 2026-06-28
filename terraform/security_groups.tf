@@ -12,13 +12,13 @@ resource "aws_security_group" "k3s" {
   description = "k3s EC2 instance"
   vpc_id      = module.vpc.vpc_id
 
-  # SSH only from my IP
+  # SSH from my IP + EC2 Instance Connect (us-east-1: 18.206.107.24/29)
   ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [local.my_ip_cidr]
+    cidr_blocks = [local.my_ip_cidr, "18.206.107.24/29"]
   }
 
   # HTTP

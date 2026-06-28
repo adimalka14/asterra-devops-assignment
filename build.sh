@@ -22,19 +22,14 @@ if [[ -z "${ECR_URL:-}" ]]; then
   ECR_URL="$(cd "${SCRIPT_DIR}/terraform" && terraform output -raw ecr_repository_url)"
 fi
 
-ECR_REGISTRY="${ECR_URL%%/*}"
-ECR_GDAL_URL="${ECR_GDAL_URL:-${ECR_REGISTRY}/${PROJECT_NAME}-gdal}"
-
-# Ensure gdal-service ECR repo exists
-if ! aws ecr describe-repositories \
-     --repository-names "${PROJECT_NAME}-gdal" \
-     --region "$REGION" &>/dev/null; then
-  log "Creating ECR repository: ${PROJECT_NAME}-gdal"
-  aws ecr create-repository \
-    --repository-name "${PROJECT_NAME}-gdal" \
-    --image-scanning-configuration scanOnPush=true \
-    --region "$REGION" &>/dev/null
+if [[ -z "${ECR_GDAL_URL:-}" ]]; then
+  log "ECR_GDAL_URL not set — reading from terraform output"
+  ECR_GDAL_URL="$(cd "${SCRIPT_DIR}/terraform" && terraform output -raw ecr_gdal_repository_url)"
 fi
+
+ECR_REGISTRY="${ECR_URL%%/*}"
+
+
 
 log "Image tag          : ${IMAGE_TAG}"
 log "ECR data-processor : ${ECR_URL}"

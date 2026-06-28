@@ -1,0 +1,211 @@
+name: Deploy App
+
+# Triggered when application code or Helm charts change on main.
+# Builds Docker images, pushes to ECR, then deploys via Helmfile.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/deploy-app.yml"
+  # Allow manual trigger with optional image tag override
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag (default: git short SHA)"
+        required: false
+        default: ""
+
+env:
+  AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION:    us-east-1
+  PROJECT_NAME:          asterra-devops-assignment
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Run tests before building ──────────────────────────────────────────────
+  test:
+    name: Test before build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [data-processor, gdal-service]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: app/${{ matrix.service }}/requirements.txt
+
+      - name: Install & test
+        run: |
+          pip install -r app/${{ matrix.service }}/requirements.txt pytest
+          pytest app/${{ matrix.service }}/tests/ -v
+
+  # ── 2. Build & push Docker images ─────────────────────────────────────────────
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+      ecr-url:      ${{ steps.tf.outputs.ecr_url }}
+      ecr-gdal-url: ${{ steps.tf.outputs.ecr_gdal_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          if [[ -z "$TAG" ]]; then
+            TAG="$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Image tag: $TAG"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Read Terraform outputs
+        id: tf
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure
+          ECR_URL="$(terraform output -raw ecr_repository_url)"
+          ECR_GDAL_URL="$(terraform output -raw ecr_gdal_repository_url)"
+          ECR_REGISTRY="${ECR_URL%%/*}"
+          echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
+          echo "ecr_gdal_url=$ECR_GDAL_URL" >> $GITHUB_OUTPUT
+          echo "ecr_registry=$ECR_REGISTRY" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_DEFAULT_REGION \
+            | docker login --username AWS --password-stdin \
+              "$(echo '${{ steps.tf.outputs.ecr_url }}' | cut -d'/' -f1)"
+
+      - name: Build & push data-processor
+        uses: docker/build-push-action@v5
+        with:
+          context: app/data-processor
+          push: true
+          tags: ${{ steps.tf.outputs.ecr_url }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+
+
+      - name: Build & push gdal-service
+        uses: docker/build-push-action@v5
+        with:
+          context: app/gdal-service
+          push: true
+          tags: ${{ steps.tf.outputs.ecr_gdal_url }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+  # ── 3. Deploy to k3s via Helmfile ─────────────────────────────────────────────
+  deploy:
+    name: Deploy to k3s
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Terraform outputs
+        id: tf
+        working-directory: terraform
+        run: |
+          terraform init -reconfigure
+          echo "instance_id=$(terraform output -raw k3s_instance_id)" >> $GITHUB_OUTPUT
+          echo "k3s_ip=$(terraform output -raw k3s_public_ip)" >> $GITHUB_OUTPUT
+          echo "sqs_url=$(terraform output -raw sqs_queue_url)" >> $GITHUB_OUTPUT
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+
+      - name: Wait for SSM agent
+        run: |
+          DEADLINE=$(( $(date +%s) + 300 ))
+          INSTANCE_ID="${{ steps.tf.outputs.instance_id }}"
+          echo "Waiting for SSM on $INSTANCE_ID..."
+          until aws ssm describe-instance-information \
+                --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                --query 'InstanceInformationList[0].PingStatus' \
+                --output text 2>/dev/null | grep -q "^Online$"; do
+            (( $(date +%s) < DEADLINE )) || { echo "SSM timeout"; exit 1; }
+            sleep 10
+          done
+          echo "SSM online"
+
+      - name: Fetch kubeconfig from k3s via SSM
+        run: |
+          INSTANCE_ID="${{ steps.tf.outputs.instance_id }}"
+          K3S_IP="${{ steps.tf.outputs.k3s_ip }}"
+
+          CMD_ID="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters 'commands=["cat /etc/rancher/k3s/k3s.yaml"]' \
+            --region $AWS_DEFAULT_REGION \
+            --query 'Command.CommandId' --output text)"
+
+          sleep 5
+
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --region $AWS_DEFAULT_REGION \
+            --query 'StandardOutputContent' --output text \
+            | sed "s|127.0.0.1|${K3S_IP}|g" > kubeconfig
+          chmod 600 kubeconfig
+
+      - name: Install Helmfile
+        run: |
+          curl -fsSL https://github.com/helmfile/helmfile/releases/download/v0.167.1/helmfile_0.167.1_linux_amd64.tar.gz \
+            | tar xz
+          sudo mv helmfile /usr/local/bin/
+
+      - name: Helmfile apply
+        working-directory: helm
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig
+        run: |
+          helmfile apply \
+            --state-values-set "region=$AWS_DEFAULT_REGION" \
+            --state-values-set "dataProcessorImage=${{ needs.build.outputs.ecr-url }}" \
+            --state-values-set "gdalServiceImage=${{ needs.build.outputs.ecr-gdal-url }}" \
+            --state-values-set "imageTag=${{ needs.build.outputs.image-tag }}" \
+            --state-values-set "sqsQueueUrl=${{ steps.tf.outputs.sqs_url }}" \
+            --state-values-set "s3BucketName=${{ steps.tf.outputs.s3_bucket }}"
+
+      - name: Verify rollout
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig
+        run: |
+          kubectl rollout status deployment/data-processor --timeout=120s
+          kubectl rollout status deployment/gdal-service   --timeout=120s
+          kubectl get pods -A
+
+      - name: Summary
+        run: |
+          echo "## Deploy Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|-|-|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image tag | \`${{ needs.build.outputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| data-processor | \`${{ needs.build.outputs.ecr-url }}:${{ needs.build.outputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| gdal-service | \`${{ needs.build.outputs.ecr-gdal-url }}:${{ needs.build.outputs.image-tag }}\` |" >> $GITHUB_STEP_SUMMARY

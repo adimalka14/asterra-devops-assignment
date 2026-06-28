@@ -24,11 +24,15 @@ releases:
     chart: external-secrets/external-secrets
     version: 0.9.0
     createNamespace: true
+    set:
+      - name: installCRDs
+        value: true
 
   # SecretStore - depends on ESO CRDs
   - name: secret-store
     namespace: default
     chart: ./charts/secret-store
+    disableValidation: true
     needs:
       - external-secrets/external-secrets
     set:
@@ -39,6 +43,7 @@ releases:
   - name: data-processor
     namespace: default
     chart: ./charts/data-processor
+    disableValidation: true
     needs:
       - default/secret-store
     values:

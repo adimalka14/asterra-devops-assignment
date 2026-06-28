@@ -51,3 +51,14 @@ resource "aws_ecr_repository" "app" {
   tags = var.tags
 }
 
+resource "aws_ecr_repository" "gdal" {
+  name                 = "${var.project_name}-gdal"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = var.tags
+}

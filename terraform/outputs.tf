@@ -20,6 +20,10 @@ output "ecr_repository_url" {
   value = aws_ecr_repository.app.repository_url
 }
 
+output "ecr_gdal_repository_url" {
+  value = aws_ecr_repository.gdal.repository_url
+}
+
 output "k3s_instance_id" {
   value = aws_instance.k3s.id
 }

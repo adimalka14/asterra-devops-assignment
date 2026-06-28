@@ -28,9 +28,9 @@ cd "${SCRIPT_DIR}/terraform"
 terraform init -input=false -reconfigure
 terraform apply -auto-approve -input=false
 
-ECR_URL="$(terraform output -raw ecr_repository_url)"
+ECR_URL="$(terraform output -json ecr_repository_url | jq -r )"
+ECR_GDAL_URL="$(terraform output -json ecr_gdal_repository_url | jq -r )"
 ECR_REGISTRY="${ECR_URL%%/*}"
-ECR_GDAL_URL="${ECR_REGISTRY}/${PROJECT_NAME}-gdal"
 SQS_QUEUE_URL="$(terraform output -raw sqs_queue_url)"
 S3_BUCKET_NAME="$(terraform output -raw s3_bucket_name)"
 K3S_IP="$(terraform output -raw k3s_public_ip)"
@@ -97,6 +97,7 @@ log "Kubeconfig ready: https://${K3S_IP}:6443"
 step 4 "Helmfile apply"
 cd "${SCRIPT_DIR}/helm"
 helmfile apply \
+  --state-values-set "region=${REGION}" \
   --state-values-set "dataProcessorImage=${ECR_URL}" \
   --state-values-set "gdalServiceImage=${ECR_GDAL_URL}" \
   --state-values-set "imageTag=${IMAGE_TAG}" \

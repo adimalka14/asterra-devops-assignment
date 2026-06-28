@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+
+jobs:
+  # ── Python tests: data-processor ──────────────────────────────────────────────
+  test-data-processor:
+    name: Test / data-processor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: app/data-processor/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r app/data-processor/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run tests
+        run: |
+          pytest app/data-processor/tests/ \
+            -v \
+            --cov=app/data-processor \
+            --cov-report=term-missing \
+            --cov-fail-under=0
+
+  # ── Python tests: gdal-service ─────────────────────────────────────────────────
+  test-gdal-service:
+    name: Test / gdal-service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: app/gdal-service/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r app/gdal-service/requirements.txt
+          pip install pytest
+
+      - name: Run tests
+        run: pytest app/gdal-service/tests/ -v
+
+  # ── Terraform format check ─────────────────────────────────────────────────────
+  terraform-lint:
+    name: Terraform fmt / validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive terraform/
+
+      - name: terraform validate (bootstrap)
+        working-directory: terraform/bootstrap
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: terraform validate (main)
+        working-directory: terraform
+        run: |
+          terraform init -backend=false
+          terraform validate
