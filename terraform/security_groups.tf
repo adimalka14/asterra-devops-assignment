@@ -45,7 +45,7 @@ resource "aws_security_group" "k3s" {
     from_port   = 6443
     to_port     = 6443
     protocol    = "tcp"
-    cidr_blocks = [local.my_ip_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {

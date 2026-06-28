@@ -178,6 +178,19 @@ jobs:
             | sed "s|127.0.0.1|${K3S_IP}|g" > kubeconfig
           chmod 600 kubeconfig
 
+      - name: Verify cluster access
+        env:
+          KUBECONFIG: ${{ github.workspace }}/kubeconfig
+        run: |
+          DEADLINE=$(( $(date +%s) + 300 ))
+          echo "Waiting for Kubernetes cluster to be ready..."
+          until kubectl cluster-info &>/dev/null; do
+            (( $(date +%s) < DEADLINE )) || { echo "Cluster access timeout"; exit 1; }
+            sleep 5
+          done
+          echo "Kubernetes cluster is ready"
+          kubectl get nodes
+
       - name: Install Helmfile
         run: |
           curl -fsSL https://github.com/helmfile/helmfile/releases/download/v0.167.1/helmfile_0.167.1_linux_amd64.tar.gz \
