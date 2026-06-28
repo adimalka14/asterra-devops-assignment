@@ -19,12 +19,8 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: MS_MAPFILE
-              value: {{ .Values.mapserver.mapfile }}
-            - name: MS_MAP_PATTERN
-              value: ".*"
-            - name: MS_MAP_NO_PATH
-              value: "{{ .Values.mapserver.msMapNoPath }}"
+            - name: MAPSERVER_CONFIG_FILE
+              value: /etc/mapserver/mapserver.conf
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

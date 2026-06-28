@@ -5,6 +5,18 @@ metadata:
   labels:
     {{- include "common.labels" . | nindent 4 }}
 data:
+  mapserver.conf: |
+    CONFIG
+      ENV
+        MS_MAP_PATTERN ".*"
+        MS_MAP_NO_PATH "FALSE"
+        MS_ERRORFILE "stderr"
+      END
+      MAPS
+        "ASTERRA" "/etc/mapserver/mapserver.map"
+      END
+    END
+
   mapserver.map: |
     MAP
       NAME "asterra-mapserver"
